@@ -1,0 +1,19 @@
+{
+  "name": "GitHub Ruleset Checker",
+  "description": "A GitHub App that checks pull requests for ruleset compliance and comments if rules are bypassed.",
+  "permissions": {
+    "issues": "write",
+    "pull_requests": "write",
+    "repository": "read"
+  },
+  "webhooks": [
+    {
+      "name": "pull_request",
+      "active": true
+    }
+  ],
+  "url": "https://github.com/yourusername/github-ruleset-checker",
+  "hook_attributes": {
+    "url": "https://yourapp.com/webhook"
+  }
+}
