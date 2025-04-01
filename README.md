@@ -11,7 +11,7 @@ The GitHub Ruleset Checker is a GitHub App designed to monitor pull requests and
 ## Installation
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/github-ruleset-checker.git
+   git clone https://github.com/katiem0/github-ruleset-checker.git
    ```
 2. Navigate to the project directory:
    ```

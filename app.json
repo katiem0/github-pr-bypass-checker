@@ -4,14 +4,24 @@
   "permissions": {
     "issues": "write",
     "pull_requests": "write",
+    "repository": "read",
+    "administration": "write",
+    "organization_administration": "write",
+    "metadata": "read"
+  },
+  "events": [
+    "pull_request",
+    "protected_branch",
+    "organization"
+  ],
+  "default_events": [
+    "pull_request.closed"
+  ],
+  "default_permissions": {
+    "issues": "write",
+    "pull_requests": "write",
     "repository": "read"
   },
-  "webhooks": [
-    {
-      "name": "pull_request",
-      "active": true
-    }
-  ],
   "url": "https://github.com/yourusername/github-ruleset-checker",
   "hook_attributes": {
     "url": "https://yourapp.com/webhook"
