@@ -1,8 +1,7 @@
 const { Octokit } = require("@octokit/rest");
-const { createAppAuth } = require('@octokit/auth-app');
+const { createAppAuth } = require("@octokit/auth-app");
 const logger = require('./logger');
-const fs = require('fs');
-const path = require('path');
+const { getGitHubCredentials } = require('./config');
 
 /**
  * Create an authenticated Octokit client using GitHub App credentials
@@ -10,8 +9,7 @@ const path = require('path');
  */
 async function createOctokitClient() {
     try {
-        const appId = process.env.GITHUB_APP_ID;
-        const installationId = process.env.INSTALLATION_ID;
+        const { appId, privateKey, installationId } = getGitHubCredentials();
         
         if (!appId) {
             logger.error('GITHUB_APP_ID environment variable is not set');
@@ -23,27 +21,17 @@ async function createOctokitClient() {
             throw new Error('Installation ID is not set in environment variables');
         }
         
-        // Extract private key from .env file
-        let privateKey;
-        try {
-            const envContent = fs.readFileSync(path.resolve(__dirname, '../../.env'), 'utf8');
-            const privateKeyMatch = envContent.match(/GITHUB_APP_PRIVATE_KEY="([\s\S]*?)"/);
-            logger.info('Extracting private key from .env file');
-            
-            if (privateKeyMatch && privateKeyMatch[1]) {
-                privateKey = privateKeyMatch[1];
-                logger.info('Successfully extracted private key from .env file');
-            } else {
-                throw new Error('Could not find private key in .env file');
-            }
-        } catch (error) {
-            logger.error(`Error reading private key: ${error.message}`);
-            throw error;
+        // Use private key directly from environment
+        if (!privateKey) {
+            logger.error('GITHUB_APP_PRIVATE_KEY environment variable is not set');
+            throw new Error('GitHub App private key is not set in environment variables');
         }
         
         logger.info(`Creating GitHub App authentication with App ID: ${appId}`);
+        logger.debug(`Private key format check: starts with "-----BEGIN"? ${privateKey.startsWith('-----BEGIN')}`);
         
-        // First create auth function
+        
+        // Create auth function
         const auth = createAppAuth({
             appId: appId,
             privateKey: privateKey,
@@ -58,7 +46,7 @@ async function createOctokitClient() {
         logger.info('Creating Octokit instance with installation token');
         const octokit = new Octokit({
             auth: token,
-            baseUrl: 'https://api.github.com'
+            baseUrl: process.env.GITHUB_API_URL || 'https://api.github.com'
         });
         
         logger.info('Successfully created authenticated Octokit client');
@@ -66,46 +54,71 @@ async function createOctokitClient() {
         return octokit;
     } catch (error) {
         logger.error(`Error creating Octokit client: ${error.message}`);
+        if (error.message.includes('secretOrPrivateKey must be an asymmetric key')) {
+            logger.error('Private key format error. Make sure your .env file contains the private key with actual newlines, not \\n characters.');
+            logger.error('Example of correct format: -----BEGIN RSA PRIVATE KEY-----\nMII...\n-----END RSA PRIVATE KEY-----');
+        }
         throw error;
     }
 }
 
 /**
- * Check for bypassed rule suites
+ * Check for bypassed rule suites at repository level
  * @param {Object} octokit - Authenticated Octokit client
- * @param {string} owner - Repository owner or organization name
- * @param {string|null} repo - Repository name (null for org-level check)
+ * @param {string} owner - Repository owner
+ * @param {string} repo - Repository name
  * @param {string} ref - Base branch reference
  * @param {string} mergeCommitSha - Merge commit SHA from the pull request
  * @returns {Array} - Array of bypassed rule suite objects
  */
 async function checkRepoBypassedRuleSuites(octokit, owner, repo, ref, mergeCommitSha) {
     try {
-        const apiPath =`/repos/${owner}/${repo}/rulesets/rule-suites`;
+        const apiPath = `/repos/${owner}/${repo}/rulesets/rule-suites`;
         
         const params = {
             ref: ref,
             rule_suite_result: 'bypass',
             headers: {
-                'Accept': 'application/vnd.github.v3+json'
+                'Accept': 'application/vnd.github.v3+json, application/vnd.github.luke-cage-preview+json, application/vnd.github.rep-preview+json'
             }
         };
-
-        logger.info(`Checking for bypassed rule suites: ${apiPath} (ref: ${ref})`);
-        // Make the API call
-        const response = await octokit.request(`GET ${apiPath}`, params);
+        
+        logger.info(`Checking for bypassed repo-level rule suites: ${apiPath} (ref: ${ref})`);
         
         let ruleSuites = [];
-
-        if (Array.isArray(response.data)) {
-            logger.info('Response contains array format of rule suites');
-            ruleSuites = response.data;
-        } else if (response.data && Array.isArray(response.data.rule_suites)) {
-            logger.info('Response contains object with rule_suites array');
-            ruleSuites = response.data.rule_suites;
-        } else {
-            logger.info(`No rule suites found at repository level for ref ${ref} (empty or unexpected format)`);
-            return [];
+        let response;
+        
+        try {
+            // Try the new format first
+            response = await octokit.request(`GET ${apiPath}`, params);
+            
+            if (Array.isArray(response.data)) {
+                logger.info('Response contains array format of rule suites');
+                ruleSuites = response.data;
+            } else if (response.data && Array.isArray(response.data.rule_suites)) {
+                logger.info('Response contains object with rule_suites array');
+                ruleSuites = response.data.rule_suites;
+            }
+        } catch (error) {
+            if (error.status === 404) {
+                // Try the old format as fallback
+                const fallbackPath = `/repos/${owner}/${repo}/rule-suites`;
+                logger.info(`API endpoint not found, trying fallback: ${fallbackPath}`);
+                
+                try {
+                    response = await octokit.request(`GET ${fallbackPath}`, params);
+                    if (Array.isArray(response.data)) {
+                        ruleSuites = response.data;
+                    } else if (response.data && Array.isArray(response.data.rule_suites)) {
+                        ruleSuites = response.data.rule_suites;
+                    }
+                } catch (fallbackError) {
+                    logger.error(`Fallback API endpoint also failed: ${fallbackError.message}`);
+                    throw fallbackError;
+                }
+            } else {
+                throw error;
+            }
         }
         
         // Log what we found
@@ -116,32 +129,19 @@ async function checkRepoBypassedRuleSuites(octokit, owner, repo, ref, mergeCommi
             return ruleSuite.after_sha === mergeCommitSha;
         });
         
-        logger.info(`Found ${bypassedRuleSuites.length} bypassed rule suites with matching merge commit SHA`);
+        logger.info(`Found ${bypassedRuleSuites.length} bypassed repo-level rule suites with matching merge commit SHA`);
         return bypassedRuleSuites;
         
     } catch (error) {
-        const level = 'repository';
-        logger.error(`Error checking bypassed rule suites at ${level} level: ${error.message}`);
-        
-        // More detailed error logging
-        if (error.status === 404) {
-            logger.error(`API endpoint not found (${apiPath}). This could mean either:
-            1. The ${level} doesn't have any rule suites configured
-            2. The GitHub App doesn't have the necessary permissions
-            3. The rule suites API is not available for this account type`);
-        } else if (error.status === 403) {
-            logger.error(`Permission denied when accessing rule suites API for ${level}.
-            Please check the GitHub App's permissions.`);
-        }
-        
-        // Return empty array instead of throwing to allow the app to continue
+        logger.error(`Error checking bypassed rule suites at repository level: ${error.message}`);
         return [];
     }
 }
+
 /**
- * Check for bypassed rule suites
+ * Check for bypassed rule suites at organization level
  * @param {Object} octokit - Authenticated Octokit client
- * @param {string} owner - Repository owner or organization name
+ * @param {string} owner - Organization name
  * @param {string|null} repo - Repository name (null for org-level check)
  * @param {string} ref - Base branch reference
  * @param {string} mergeCommitSha - Merge commit SHA from the pull request
@@ -150,61 +150,72 @@ async function checkRepoBypassedRuleSuites(octokit, owner, repo, ref, mergeCommi
 async function checkOrgBypassedRulesSuites(octokit, owner, repo, ref, mergeCommitSha) {
     try {
         const apiPath = `/orgs/${owner}/rulesets/rule-suites`;
+        
         const params = {
             ref: ref,
             rule_suite_result: 'bypass',
-            repository_name: repo,
             headers: {
-                'Accept': 'application/vnd.github.v3+json'
+                'Accept': 'application/vnd.github.v3+json, application/vnd.github.luke-cage-preview+json, application/vnd.github.rep-preview+json'
             }
         };
         
-        logger.info(`Checking for bypassed rule suites: ${apiPath} (ref: ${ref})`);
-        
-        const response = await octokit.request(`GET ${apiPath}`, params);
+        // Only add repository_name if repo is provided and not null
+        if (repo) {
+            params.repository_name = repo;
+            logger.info(`Checking for bypassed org-level rule suites: ${apiPath} (ref: ${ref}, repository: ${repo})`);
+        } else {
+            logger.info(`Checking for bypassed org-level rule suites: ${apiPath} (ref: ${ref}, all repositories)`);
+        }
         
         let ruleSuites = [];
+        let response;
         
-        if (Array.isArray(response.data)) {
-            logger.info('Response contains array format of rule suites');
-            ruleSuites = response.data;
-            logger.info(`Data type: ${typeof response.data}, length: ${response.data.length}`);
-        } else if (response.data && Array.isArray(response.data.rule_suites)) {
-            logger.info('Response contains object with rule_suites array');
-            ruleSuites = response.data.rule_suites;
-            logger.info(`Data type: ${typeof response.data.rule_suites}, length: ${response.data.rule_suites.length}`);
-        } else {
-
-            logger.info(`Unexpected response format. Response data type: ${typeof response.data}`);
-            logger.info(`Response data: ${JSON.stringify(response.data).substring(0, 200)}...`);
-            logger.info(`No rule suites found at organization level for ref ${ref} (empty or unexpected format)`);
-            return [];
+        try {
+            // Try the new format first
+            response = await octokit.request(`GET ${apiPath}`, params);
+            
+            if (Array.isArray(response.data)) {
+                logger.info('Response contains array format of rule suites');
+                ruleSuites = response.data;
+            } else if (response.data && Array.isArray(response.data.rule_suites)) {
+                logger.info('Response contains object with rule_suites array');
+                ruleSuites = response.data.rule_suites;
+            }
+        } catch (error) {
+            if (error.status === 404) {
+                // Try the old format as fallback
+                const fallbackPath = `/orgs/${owner}/rule-suites`;
+                logger.info(`API endpoint not found, trying fallback: ${fallbackPath}`);
+                
+                try {
+                    response = await octokit.request(`GET ${fallbackPath}`, params);
+                    if (Array.isArray(response.data)) {
+                        ruleSuites = response.data;
+                    } else if (response.data && Array.isArray(response.data.rule_suites)) {
+                        ruleSuites = response.data.rule_suites;
+                    }
+                } catch (fallbackError) {
+                    logger.error(`Fallback API endpoint also failed: ${fallbackError.message}`);
+                    throw fallbackError;
+                }
+            } else {
+                throw error;
+            }
         }
-
+        
+        // Log what we found
         logger.info(`Found ${ruleSuites.length} rule suites at organization level`);
+        
+        // Filter rule suites to those matching our merge commit SHA
         const bypassedRuleSuites = ruleSuites.filter(ruleSuite => {
             return ruleSuite.after_sha === mergeCommitSha;
         });
         
-        logger.info(`Found ${bypassedRuleSuites.length} bypassed rule suites with matching merge commit SHA`);
+        logger.info(`Found ${bypassedRuleSuites.length} bypassed org-level rule suites with matching merge commit SHA`);
         return bypassedRuleSuites;
         
     } catch (error) {
-        const level = 'organization';
-        logger.error(`Error checking bypassed rule suites at ${level} level: ${error.message}`);
-        
-        // More detailed error logging
-        if (error.status === 404) {
-            logger.error(`API endpoint not found (${apiPath}). This could mean either:
-            1. The ${level} doesn't have any rule suites configured
-            2. The GitHub App doesn't have the necessary permissions
-            3. The rule suites API is not available for this account type`);
-        } else if (error.status === 403) {
-            logger.error(`Permission denied when accessing rule suites API for ${level}.
-            Please check the GitHub App's permissions.`);
-        }
-        
-        // Return empty array instead of throwing to allow the app to continue
+        logger.error(`Error checking bypassed rule suites at organization level: ${error.message}`);
         return [];
     }
 }
@@ -243,7 +254,7 @@ module.exports = {
         try {
             // Add required headers
             params.headers = {
-                'Accept': 'application/vnd.github.v3+json'
+                'Accept': 'application/vnd.github.v3+json, application/vnd.github.luke-cage-preview+json, application/vnd.github.rep-preview+json'
             };
             
             const endpoint = repo ? 

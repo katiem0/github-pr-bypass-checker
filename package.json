@@ -1,11 +1,13 @@
 {
-  "name": "github-ruleset-checker",
+  "name": "github-pr-bypass-checker",
   "version": "1.0.0",
   "description": "A GitHub App that checks pull requests for ruleset compliance and comments if bypassed.",
   "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
+    "dev:fetch": "NODE_OPTIONS='--experimental-fetch' nodemon src/app.js",
+    "smee": "smee -t http://localhost:${PORT:-3000}/webhook",
     "test": "jest"
   },
   "dependencies": {
@@ -26,8 +28,13 @@
     "github",
     "app",
     "ruleset",
-    "pull request"
+    "pull request",
+    "github-app"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/katiem0/github-pr-bypass-checker"
+  },
   "author": "Katie May",
   "license": "MIT"
 }
