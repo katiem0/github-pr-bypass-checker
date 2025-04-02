@@ -13,6 +13,11 @@ The GitHub Ruleset Checker is a GitHub App designed to monitor pull requests and
 - Multiple deployment options (Heroku, AWS, Azure, self-hosted)
 - Development mode with Smee.io integration for local testing
 
+### Example Pull request Comment
+
+<img width="927" alt="Screenshot 2025-04-01 at 8 08 25 PM" src="https://github.com/user-attachments/assets/68afd768-a2d1-459a-b68a-2508cc195d5c" />
+
+
 ## Installation
 
 ### Prerequisites
