@@ -15,7 +15,7 @@ The GitHub Ruleset Checker is a GitHub App designed to monitor pull requests and
 
 ### Example Pull request Comment
 
-
+<img width="952" alt="Screenshot 2025-04-01 at 8 30 38 PM" src="https://github.com/user-attachments/assets/73d8515b-0c06-4f58-95dd-c2e553ada77d" />
 
 ## Installation
 
