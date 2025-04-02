@@ -123,7 +123,7 @@ async function postRulesetBypassComment(octokit, owner, repo, pullNumber, ruleSu
         
         const comment = `## 🚨 Ruleset Bypass Detected
 
-This pull request was merged with **${ruleSuites.length}** bypassed ruleset(s).
+This pull request was merged with bypassed ruleset(s).
 
 ### Repository-Level Bypasses
 [View Bypassed Repository Ruleset Insights](${repoRulesetUrl})

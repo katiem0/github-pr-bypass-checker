@@ -7,26 +7,35 @@
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
     "dev:fetch": "NODE_OPTIONS='--experimental-fetch' nodemon src/app.js",
-    "smee": "smee -u ${WEBHOOK_PROXY_URL} -t http://localhost:${PORT:-3000}/webhook",
-    "smee:new": "smee -t http://localhost:${PORT:-3000}/webhook",
+    "smee": "smee -u ${WEBHOOK_PROXY_URL:-https://smee.io/new} -t http://localhost:${PORT:-3000}/webhook",
+    "smee:new": "smee -u -t http://localhost:${PORT:-3000}/webhook",
     "test": "jest",
     "lint": "eslint .",
     "docker:build": "docker build -t github-pr-bypass-checker .",
-    "docker:run": "docker run -p ${PORT:-3000}:3000 --env-file .env github-pr-bypass-checker"
+    "docker:run": "docker run -p ${PORT:-3000}:3000 --env-file .env github-pr-bypass-checker",
+    "docker:prod": "docker build -t github-pr-bypass-checker:production . && docker run -p ${PORT:-3000}:3000 -e NODE_ENV=production --env-file .env.production github-pr-bypass-checker:production",
+    "prepare": "husky install || echo 'Skipping husky installation'"
   },
   "dependencies": {
     "@octokit/auth-app": "^4.0.9",
     "@octokit/rest": "^19.0.7",
-    "axios": "^0.21.1",
-    "dotenv": "^10.0.0",
-    "express": "^4.17.1",
+    "axios": "^0.24.0",
+    "body-parser": "^1.20.2",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "node-fetch": "^2.6.9",
     "octokit": "^4.1.2",
     "smee-client": "^3.1.1"
   },
   "devDependencies": {
-    "jest": "^26.6.0",
-    "nodemon": "^2.0.20",
-    "supertest": "^6.1.0"
+    "eslint": "^8.35.0",
+    "husky": "^8.0.3",
+    "jest": "^29.4.3",
+    "nodemon": "^2.0.21",
+    "supertest": "^6.3.3"
+  },
+  "engines": {
+    "node": ">=16"
   },
   "keywords": [
     "github",
@@ -36,7 +45,7 @@
     "github-app"
   ],
   "repository": {
-    "type": "git",
+    "type": "git", 
     "url": "https://github.com/katiem0/github-pr-bypass-checker"
   },
   "author": "Katie May",

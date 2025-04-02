@@ -31,7 +31,6 @@ if (nodeEnv === 'development') {
     setupDevelopmentProxy(webhookProxyUrl, port);
   }
 }
-
 /**
  * Set up a development proxy (Smee) for local webhook testing
  * @param {string} proxyUrl - The Smee proxy URL
@@ -41,11 +40,9 @@ async function setupDevelopmentProxy(proxyUrl, serverPort) {
   try {
     logger.info(`Setting up development webhook proxy with URL: ${proxyUrl}`);
     
-    // Check Node.js version and set up fetch for Smee client
+    // Check Node.js version to handle fetch polyfill for Node 18+
     const nodeVersion = process.version;
     if (nodeVersion.startsWith('v18') || nodeVersion.startsWith('v19') || nodeVersion.startsWith('v20')) {
-      logger.info(`Detected Node.js ${nodeVersion} - adding fetch polyfill for Smee client`);
-      // Polyfill fetch for Node.js 18+ to work with Smee client
       try {
         const nodeFetch = require('node-fetch');
         // @ts-ignore
@@ -63,8 +60,12 @@ async function setupDevelopmentProxy(proxyUrl, serverPort) {
     }
     
     try {
-      // Use require instead of dynamic import for Smee client
+      // Use CommonJS require for Smee client (not ES modules)
       const SmeeClient = require('smee-client');
+      
+      if (!SmeeClient) {
+        throw new Error('SmeeClient is undefined after require');
+      }
       
       const smee = new SmeeClient({
         source: proxyUrl,
@@ -77,56 +78,38 @@ async function setupDevelopmentProxy(proxyUrl, serverPort) {
 
       logger.info(`Starting Smee client to forward ${proxyUrl} to http://localhost:${serverPort}/webhook`);
       
-      // Start the event source with retry logic
       try {
         const events = smee.start();
         logger.info('[Smee] Client started successfully');
         
-        // Add explicit error handling to EventSource
+        // Add explicit error handling
         if (events && events.source) {
           events.source.onerror = function(err) {
-            logger.error(`[Smee] EventSource error: ${err ? err.message || err : 'Unknown error'}`);
-            
-            // Try to reconnect after a delay
-            setTimeout(() => {
-              logger.info('[Smee] Attempting to reconnect...');
-              try {
-                events.close();
-                const newEvents = smee.start();
-                if (newEvents && newEvents.source) {
-                  logger.info('[Smee] Successfully reconnected');
-                  events.source = newEvents.source;
-                }
-              } catch (reconnectError) {
-                logger.error(`[Smee] Reconnection failed: ${reconnectError.message}`);
-              }
-            }, 3000);
+            logger.error(`[Smee] EventSource error: ${err ? (err.message || err) : 'Unknown error'}`);
           };
-
-          // Add message handler to log received events
+          
           events.source.onmessage = function(message) {
-            try {
-              const data = JSON.parse(message.data);
-              logger.info(`[Smee] Received event: ${data['x-github-event'] || 'unknown'}`);
-            } catch (e) {
-              logger.info('[Smee] Received message (not JSON)');
-            }
+            logger.info(`[Smee] Received event`);
           };
+          
+          return events;
+        } else {
+          logger.error('[Smee] Failed to create event source');
+          return null;
         }
-        
-        return events;
       } catch (startError) {
         logger.error(`[Smee] Error starting client: ${startError.message}`);
-        
-        // More detailed troubleshooting advice
-        logger.error('For Node.js 18+, try running with:');
-        logger.error('NODE_OPTIONS="--experimental-fetch" npm run dev');
-        
         return null;
       }
     } catch (importError) {
       logger.error(`Failed to import smee-client: ${importError.message}`);
-      logger.error('Make sure smee-client is installed: npm install smee-client');
+      // Check if package is installed
+      try {
+        require.resolve('smee-client');
+        logger.info('smee-client is installed but could not be initialized');
+      } catch (e) {
+        logger.error('smee-client package is not installed. Try: npm install smee-client');
+      }
       return null;
     }
   } catch (error) {
@@ -223,6 +206,20 @@ app.post('/webhook', verifyGitHubWebhook, (req, res) => {
       res.status(500).send('Error processing webhook');
     }
   }
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  const healthStatus = {
+    status: 'healthy',
+    uptime: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+    version: process.env.npm_package_version || '1.0.0',
+    nodeVersion: process.version,
+    memoryUsage: process.memoryUsage()
+  };
+  
+  res.status(200).json(healthStatus);
 });
 
 /**
