@@ -7,8 +7,12 @@
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
     "dev:fetch": "NODE_OPTIONS='--experimental-fetch' nodemon src/app.js",
-    "smee": "smee -t http://localhost:${PORT:-3000}/webhook",
-    "test": "jest"
+    "smee": "smee -u ${WEBHOOK_PROXY_URL} -t http://localhost:${PORT:-3000}/webhook",
+    "smee:new": "smee -t http://localhost:${PORT:-3000}/webhook",
+    "test": "jest",
+    "lint": "eslint .",
+    "docker:build": "docker build -t github-pr-bypass-checker .",
+    "docker:run": "docker run -p ${PORT:-3000}:3000 --env-file .env github-pr-bypass-checker"
   },
   "dependencies": {
     "@octokit/auth-app": "^4.0.9",

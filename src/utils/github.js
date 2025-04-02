@@ -38,15 +38,34 @@ async function createOctokitClient() {
             installationId: installationId
         });
         
-        // Get an installation token
-        logger.info(`Getting installation token for installation ID: ${installationId}`);
-        const { token } = await auth({ type: "installation" });
+        let token;
+        let retries = 3;
         
+        while (retries > 0) {
+            try {
+                logger.info(`Getting installation token for installation ID: ${installationId}`);
+                const authResult = await auth({ type: "installation" });
+                token = authResult.token;
+                break;
+            } catch (error) {
+                retries--;
+                if (retries === 0) {
+                    throw error;
+                }
+                logger.warn(`Error getting token, retrying (${retries} attempts left): ${error.message}`);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        }
         // Create Octokit instance with the token
         logger.info('Creating Octokit instance with installation token');
         const octokit = new Octokit({
             auth: token,
-            baseUrl: process.env.GITHUB_API_URL || 'https://api.github.com'
+            baseUrl: process.env.GITHUB_API_URL || 'https://api.github.com',
+            request: {
+                timeout: 10000, // 10 second timeout
+                retries: 3,
+                retryAfter: 1 // 1 second between retries
+            }
         });
         
         logger.info('Successfully created authenticated Octokit client');

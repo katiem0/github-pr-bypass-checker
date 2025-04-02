@@ -89,5 +89,27 @@ The GitHub Ruleset Checker is a GitHub App designed to monitor pull requests and
    npm run smee
    ```
 
-### Production Deployment
+### Production Deployment Setup
 
+This GitHub Ruleset Checker app can be deployed in various production environments. Follow these instructions for a reliable deployment:
+
+### Docker Deployment
+
+1. Build the Docker image:
+   ```bash
+   npm run docker:build
+   ```
+2. Run the container
+   ```bash
+   npm run docker:run
+   ```
+   Or manually:
+   ```bash
+   docker run -p 3000:3000 \
+   -e NODE_ENV=production \
+   -e GITHUB_APP_ID=your_app_id \
+   -e GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA..." \
+   -e INSTALLATION_ID=your_installation_id \
+   github-pr-bypass-checker
+   ```
+3. Set up a reverse proxy (i.e. nginx) with `HTTPS` and point the GitHub App webhook URL at.

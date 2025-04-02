@@ -16,6 +16,10 @@ function validateRuleset(pullRequest) {
     }
 }
 
+/**
+ * Handle the pull request event
+ * @param {Object} context - The webhook context
+ */
 async function handlePullRequest(context) {
     try {
         if (!context.payload) {
@@ -32,18 +36,12 @@ async function handlePullRequest(context) {
         const action = context.payload.action;
         logger.info(`Processing pull request #${pullRequest.number}, action: ${action}`);
 
-        if (action === 'closed' && pullRequest.merged) {
+        // Only process merged pull requests when they're closed
+        if (action === 'closed' && pullRequest.merged === true) {
+            logger.info(`Pull request #${pullRequest.number} was merged, checking for ruleset bypasses`);
             await handlePullRequestClosed(pullRequest);
         } else {
-            // Handle other pull request events
-            const bypassed = !validateRuleset(pullRequest);
-
-            if (bypassed) {
-                const comment = 'This pull request has bypassed the required rulesets.';
-                const octokit = await createOctokitClient();
-                const [owner, repo] = pullRequest.base.repo.full_name.split('/');
-                await postComment(octokit, owner, repo, pullRequest.number, comment);
-            }
+            logger.info(`Skipping ruleset bypass check for PR #${pullRequest.number} - not a merged PR`);
         }
     } catch (error) {
         logger.error(`Error handling pull request: ${error.message}`);

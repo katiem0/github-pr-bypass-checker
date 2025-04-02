@@ -234,24 +234,28 @@ app.post('/webhook', verifyGitHubWebhook, (req, res) => {
  */
 async function processWebhook(event, action, payload, deliveryId) {
   try {
-    logger.info(`Processing ${event}.${action || 'unknown'} webhook (${deliveryId || 'no-id'})`);
-    
-    if (event === 'pull_request') {
-      await handlePullRequest({ payload });
-    } else if (event === 'protected_branch' && action === 'policy_override') {
-      logger.info('Received protected_branch.policy_override event');
-      // Add handling for protected branch events if needed
-    } else if (event === 'organization' && action === 'audit_log_event') {
-      logger.info('Received organization.audit_log_event event');
-      // Add handling for organization events if needed
-    } else {
-      logger.info(`No handler for ${event}.${action || 'unknown'} event`);
-    }
-    
-    logger.info(`Finished processing ${event}.${action || 'unknown'} webhook (${deliveryId || 'no-id'})`);
+      logger.info(`Processing ${event}.${action || 'unknown'} webhook (${deliveryId || 'no-id'})`);
+      
+      // For pull requests, only consider them when they're closed and merged
+      if (event === 'pull_request') {
+          // Only process merged PRs
+          if (action === 'closed' && payload.pull_request && payload.pull_request.merged === true) {
+              logger.info(`Processing merged pull request #${payload.pull_request.number}`);
+              await handlePullRequest({ payload });
+          } else {
+              logger.info(`Skipping non-merged pull request #${payload.pull_request?.number || 'unknown'}`);
+          }
+      } else if (event === 'protected_branch' && action === 'policy_override') {
+          logger.info('Received protected_branch.policy_override event');
+          // Add handling for protected branch events if needed
+      } else {
+          logger.info(`No handler for ${event}.${action || 'unknown'} event`);
+      }
+      
+      logger.info(`Finished processing ${event}.${action || 'unknown'} webhook (${deliveryId || 'no-id'})`);
   } catch (error) {
-    logger.error(`Error processing ${event}.${action || 'unknown'} webhook: ${error.message}`);
-    logger.error(error.stack);
+      logger.error(`Error processing ${event}.${action || 'unknown'} webhook: ${error.message}`);
+      logger.error(error.stack);
   }
 }
 
