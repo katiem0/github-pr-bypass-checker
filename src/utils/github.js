@@ -102,6 +102,14 @@ function isValidOwner(owner) {
  */
 async function checkRepoBypassedRuleSuites(octokit, owner, repo, ref, mergeCommitSha) {
     try {
+        // Validate owner and repo values
+        const ownerPattern = /^[a-zA-Z0-9-]+$/;
+        const repoPattern = /^[a-zA-Z0-9_-]+$/;
+        if (!ownerPattern.test(owner) || !repoPattern.test(repo)) {
+            logger.error(`Invalid owner or repo value: owner=${owner}, repo=${repo}`);
+            return [];
+        }
+        
         const apiPath = `/repos/${owner}/${repo}/rulesets/rule-suites`;
         
         const params = {
