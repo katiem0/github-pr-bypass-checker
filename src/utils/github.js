@@ -157,88 +157,6 @@ async function checkRepoBypassedRuleSuites(octokit, owner, repo, ref, mergeCommi
     }
 }
 
-/**
- * Check for bypassed rule suites at organization level
- * @param {Object} octokit - Authenticated Octokit client
- * @param {string} owner - Organization name
- * @param {string|null} repo - Repository name (null for org-level check)
- * @param {string} ref - Base branch reference
- * @param {string} mergeCommitSha - Merge commit SHA from the pull request
- * @returns {Array} - Array of bypassed rule suite objects
- */
-async function checkOrgBypassedRulesSuites(octokit, owner, repo, ref, mergeCommitSha) {
-    try {
-        const apiPath = `/orgs/${owner}/rulesets/rule-suites`;
-        
-        const params = {
-            ref: ref,
-            rule_suite_result: 'bypass',
-            headers: {
-                'Accept': 'application/vnd.github.v3+json, application/vnd.github.luke-cage-preview+json, application/vnd.github.rep-preview+json'
-            }
-        };
-        
-        // Only add repository_name if repo is provided and not null
-        if (repo) {
-            params.repository_name = repo;
-            logger.info(`Checking for bypassed org-level rule suites: ${apiPath} (ref: ${ref}, repository: ${repo})`);
-        } else {
-            logger.info(`Checking for bypassed org-level rule suites: ${apiPath} (ref: ${ref}, all repositories)`);
-        }
-        
-        let ruleSuites = [];
-        let response;
-        
-        try {
-            // Try the new format first
-            response = await octokit.request(`GET ${apiPath}`, params);
-            
-            if (Array.isArray(response.data)) {
-                logger.info('Response contains array format of rule suites');
-                ruleSuites = response.data;
-            } else if (response.data && Array.isArray(response.data.rule_suites)) {
-                logger.info('Response contains object with rule_suites array');
-                ruleSuites = response.data.rule_suites;
-            }
-        } catch (error) {
-            if (error.status === 404) {
-                // Try the old format as fallback
-                const fallbackPath = `/orgs/${owner}/rule-suites`;
-                logger.info(`API endpoint not found, trying fallback: ${fallbackPath}`);
-                
-                try {
-                    response = await octokit.request(`GET ${fallbackPath}`, params);
-                    if (Array.isArray(response.data)) {
-                        ruleSuites = response.data;
-                    } else if (response.data && Array.isArray(response.data.rule_suites)) {
-                        ruleSuites = response.data.rule_suites;
-                    }
-                } catch (fallbackError) {
-                    logger.error(`Fallback API endpoint also failed: ${fallbackError.message}`);
-                    throw fallbackError;
-                }
-            } else {
-                throw error;
-            }
-        }
-        
-        // Log what we found
-        logger.info(`Found ${ruleSuites.length} rule suites at organization level`);
-        
-        // Filter rule suites to those matching our merge commit SHA
-        const bypassedRuleSuites = ruleSuites.filter(ruleSuite => {
-            return ruleSuite.after_sha === mergeCommitSha;
-        });
-        
-        logger.info(`Found ${bypassedRuleSuites.length} bypassed org-level rule suites with matching merge commit SHA`);
-        return bypassedRuleSuites;
-        
-    } catch (error) {
-        logger.error(`Error checking bypassed rule suites at organization level: ${error.message}`);
-        return [];
-    }
-}
-
 module.exports = {
     fetchPullRequestDetails: async (octokit, owner, repo, pull_number) => {
         try {
@@ -289,6 +207,5 @@ module.exports = {
     },
     
     createOctokitClient,
-    checkRepoBypassedRuleSuites,
-    checkOrgBypassedRulesSuites
+    checkRepoBypassedRuleSuites
 };

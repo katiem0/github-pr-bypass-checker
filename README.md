@@ -2,11 +2,11 @@
 
 ## Overview
 
-The GitHub Ruleset Checker is a GitHub App designed to monitor pull requests and detect when ruleset protections have been bypassed. When bypasses occur, the app automatically comments on pull requests with details about the bypassed rules, providing transparency and accountability for your organization's governance policies.
+The GitHub Ruleset Checker is a GitHub App designed to monitor pull requests and detect when ruleset protections have been bypassed at the repository level. When bypasses occur, the app automatically comments on pull requests with details about the bypassed rules, providing transparency and accountability for your organization's governance policies.
 
 ## Features
 
-- Detects ruleset bypasses at both organization and repository levels
+- Detects repository ruleset bypasses
 - Provides detailed information about bypassed rules including who performed the bypass
 - Automatically comments on pull requests with links to GitHub's ruleset insights pages
 - Works with GitHub Enterprise Cloud and GitHub.com
