@@ -82,6 +82,16 @@ async function createOctokitClient() {
 }
 
 /**
+ * Validate the owner parameter
+ * @param {string} owner - Repository owner
+ * @returns {boolean} - Returns true if the owner is valid, false otherwise
+ */
+function isValidOwner(owner) {
+    const validOwnerPattern = /^[a-zA-Z0-9-]+$/;
+    return validOwnerPattern.test(owner);
+}
+
+/**
  * Check for bypassed rule suites at repository level
  * @param {Object} octokit - Authenticated Octokit client
  * @param {string} owner - Repository owner
@@ -92,6 +102,14 @@ async function createOctokitClient() {
  */
 async function checkRepoBypassedRuleSuites(octokit, owner, repo, ref, mergeCommitSha) {
     try {
+        // Validate owner and repo values
+        const ownerPattern = /^[a-zA-Z0-9-]+$/;
+        const repoPattern = /^[a-zA-Z0-9_-]+$/;
+        if (!ownerPattern.test(owner) || !repoPattern.test(repo)) {
+            logger.error(`Invalid owner or repo value: owner=${owner}, repo=${repo}`);
+            return [];
+        }
+        
         const apiPath = `/repos/${owner}/${repo}/rulesets/rule-suites`;
         
         const params = {
@@ -121,6 +139,10 @@ async function checkRepoBypassedRuleSuites(octokit, owner, repo, ref, mergeCommi
         } catch (error) {
             if (error.status === 404) {
                 // Try the old format as fallback
+                if (!isValidOwner(owner)) {
+                    logger.error(`Invalid owner parameter: ${owner}`);
+                    throw new Error('Invalid owner parameter');
+                }
                 const fallbackPath = `/repos/${owner}/${repo}/rule-suites`;
                 logger.info(`API endpoint not found, trying fallback: ${fallbackPath}`);
                 
