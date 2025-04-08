@@ -1,5 +1,5 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
 // Get environment variables for logging configuration
 const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
@@ -69,4 +69,4 @@ const logger = {
   }
 };
 
-module.exports = logger;
+export default logger;

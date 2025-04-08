@@ -1,7 +1,7 @@
-const { Octokit } = require("@octokit/rest");
-const { createAppAuth } = require("@octokit/auth-app");
-const logger = require('./logger');
-const { getGitHubCredentials } = require('./config');
+import { Octokit } from "@octokit/rest";
+import { createAppAuth } from "@octokit/auth-app";
+import logger from './logger.js';
+import { getGitHubCredentials } from './config.js';
 
 /**
  * Create an authenticated Octokit client using GitHub App credentials
@@ -118,7 +118,7 @@ async function checkRepoBypassedRuleSuites(octokit, owner, repo, ref, mergeCommi
             headers: {
                 'Accept': 'application/vnd.github.v3+json, application/vnd.github.luke-cage-preview+json, application/vnd.github.rep-preview+json'
             }
-        };
+        }
         
         logger.info(`Checking for bypassed repo-level rule suites: ${apiPath} (ref: ${ref})`);
         
@@ -179,55 +179,58 @@ async function checkRepoBypassedRuleSuites(octokit, owner, repo, ref, mergeCommi
     }
 }
 
-module.exports = {
-    fetchPullRequestDetails: async (octokit, owner, repo, pull_number) => {
-        try {
-            const { data } = await octokit.pulls.get({
-                owner,
-                repo,
-                pull_number,
-            });
-            return data;
-        } catch (error) {
-            logger.error(`Error fetching PR details: ${error.message}`);
-            throw error;
-        }
-    },
+async function fetchPullRequestDetails(octokit, owner, repo, pull_number) {
+    try {
+        const { data } = await octokit.pulls.get({
+            owner,
+            repo,
+            pull_number,
+        });
+        return data;
+    } catch (error) {
+        logger.error(`Error fetching PR details: ${error.message}`);
+        throw error;
+    }
+}
 
-    postComment: async (octokit, owner, repo, pull_number, comment) => {
-        try {
-            await octokit.issues.createComment({
-                owner,
-                repo,
-                issue_number: pull_number,
-                body: comment,
-            });
-            logger.info(`Comment posted to PR #${pull_number}`);
-        } catch (error) {
-            logger.error(`Error posting comment: ${error.message}`);
-            throw error;
-        }
-    },
-    
-    getRuleSuites: async (octokit, owner, repo, params = {}) => {
-        try {
-            // Add required headers
-            params.headers = {
-                'Accept': 'application/vnd.github.v3+json, application/vnd.github.luke-cage-preview+json, application/vnd.github.rep-preview+json'
-            };
+async function postComment(octokit, owner, repo, pull_number, comment) {
+    try {
+        await octokit.issues.createComment({
+            owner,
+            repo,
+            issue_number: pull_number,
+            body: comment,
+        });
+        logger.info(`Comment posted to PR #${pull_number}`);
+    } catch (error) {
+        logger.error(`Error posting comment: ${error.message}`);
+        throw error;
+    }
+}
+
+async function getRuleSuites(octokit, owner, repo, params = {}) {
+    try {
+        // Add required headers
+        params.headers = {
+            'Accept': 'application/vnd.github.v3+json, application/vnd.github.luke-cage-preview+json, application/vnd.github.rep-preview+json'
+        };
+        
+        const endpoint = repo ? 
+            `/repos/${owner}/${repo}/rulesets/rule-suites` : 
+            `/orgs/${owner}/rulesets/rule-suites`;
             
-            const endpoint = repo ? 
-                `/repos/${owner}/${repo}/rulesets/rule-suites` : 
-                `/orgs/${owner}/rulesets/rule-suites`;
-                
-            const response = await octokit.request(`GET ${endpoint}`, params);
-            return response.data;
-        } catch (error) {
-            logger.error(`Error fetching rule suites: ${error.message}`);
-            return { rule_suites: [] }; // Return empty object with expected structure
-        }
-    },
-    
+        const response = await octokit.request(`GET ${endpoint}`, params);
+        return response.data;
+    } catch (error) {
+        logger.error(`Error fetching rule suites: ${error.message}`);
+        return { rule_suites: [] }; // Return empty object with expected structure
+    }
+}
+
+export {
+    fetchPullRequestDetails,
+    postComment,
+    getRuleSuites,
     createOctokitClient,
     checkRepoBypassedRuleSuites
 };

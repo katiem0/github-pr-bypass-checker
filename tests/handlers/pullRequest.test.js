@@ -1,5 +1,5 @@
-const { handlePullRequest } = require('../../src/handlers/pullRequest');
-const { createOctokitClient, postComment } = require('../../src/utils/github');
+import { createOctokitClient, postComment } from '../../src/utils/github.js';
+import { jest } from '@jest/globals';
 
 // Mock dependencies
 jest.mock('../../src/utils/github');

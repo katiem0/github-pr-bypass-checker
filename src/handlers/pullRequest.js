@@ -1,6 +1,5 @@
-const { createOctokitClient, postComment, checkRepoBypassedRuleSuites, checkOrgBypassedRulesSuites } = require('../utils/github');
-const logger = require('../utils/logger');
-
+import { createOctokitClient, postComment, checkRepoBypassedRuleSuites } from '../utils/github.js';
+import logger from '../utils/logger.js';
 /**
  * Validate if a ruleset is being bypassed
  * @param {Object} pullRequest - Pull request object from webhook payload
@@ -166,4 +165,7 @@ function formatRuleSuites(ruleSuites) {
     }).join('\n\n');
 }
 
-module.exports = { handlePullRequest, validateRuleset };
+export { 
+    handlePullRequest, 
+    validateRuleset 
+};

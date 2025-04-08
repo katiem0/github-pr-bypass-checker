@@ -3,12 +3,13 @@
   "version": "1.0.0",
   "description": "A GitHub App that checks pull requests for ruleset compliance and comments if bypassed.",
   "main": "src/app.js",
+  "type": "module",
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
     "dev:fetch": "NODE_OPTIONS='--experimental-fetch' nodemon src/app.js",
-    "smee": "smee -u ${WEBHOOK_PROXY_URL:-https://smee.io/new} -t http://localhost:${PORT:-3000}/webhook",
-    "smee:new": "smee -u -t http://localhost:${PORT:-3000}/webhook",
+    "smee": "npx smee-client -u ${WEBHOOK_PROXY_URL} -t http://localhost:${PORT:-3000}",
+    "smee:new": "npx smee-client --generate-unique-url -t http://localhost:${PORT:-3000}",
     "test": "jest",
     "lint": "eslint .",
     "docker:build": "docker build -t github-pr-bypass-checker .",
@@ -23,19 +24,25 @@
     "body-parser": "^2.2.0",
     "dotenv": "^16.0.3",
     "express": "^5.1.0",
-    "node-fetch": "^3.3.2",
-    "octokit": "^4.1.2",
-    "smee-client": "^3.1.1"
+    "octokit": "^4.1.2"
   },
   "devDependencies": {
     "eslint": "^9.23.0",
     "husky": "^9.1.7",
     "jest": "^29.4.3",
     "nodemon": "^3.1.9",
+    "smee-client": "^3.1.1",
     "supertest": "^7.1.0"
   },
   "engines": {
-    "node": ">=16"
+    "node": ">=18"
+  },
+  "jest": {
+    "transform": {},
+    "extensionsToTreatAsEsm": [".js"],
+    "moduleNameMapper": {
+      "^(\\.{1,2}/.*)\\.js$": "$1"
+    }
   },
   "keywords": [
     "github",

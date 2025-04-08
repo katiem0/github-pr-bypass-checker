@@ -1,5 +1,6 @@
-const { fetchPullRequest, postComment } = require('../../src/utils/github');
-const { validateRuleset } = require('../../src/handlers/ruleset');
+import { fetchPullRequest, postComment } from '../../src/utils/github.js';
+import { validateRuleset } from '../../src/handlers/ruleset.js';
+import { jest } from '@jest/globals';
 
 describe('GitHub Utility Functions', () => {
     let mockFetchPullRequest;

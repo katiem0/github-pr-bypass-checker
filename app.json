@@ -2,7 +2,6 @@
   "name": "GitHub Ruleset Checker",
   "description": "A GitHub App that checks pull requests for ruleset compliance and comments if rules are bypassed.",
   "permissions": {
-    "issues": "write",
     "pull_requests": "write",
     "repository": "read",
     "administration": "write",
@@ -11,8 +10,7 @@
   },
   "events": [
     "pull_request",
-    "protected_branch",
-    "organization"
+    "protected_branch"
   ],
   "default_events": [
     "pull_request.closed"
@@ -22,8 +20,8 @@
     "pull_requests": "write",
     "repository": "read"
   },
-  "url": "https://github.com/yourusername/github-ruleset-checker",
+  "url": "https://github.com/katiem0/github-pr-bypass-checker",
   "hook_attributes": {
-    "url": "https://yourapp.com/webhook"
+    "url": "https://yourapp.com"
   }
 }

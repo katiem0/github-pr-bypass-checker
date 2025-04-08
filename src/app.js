@@ -1,9 +1,15 @@
-const express = require('express');
-const bodyParser = require('body-parser');
-const crypto = require('crypto');
-const { handlePullRequest } = require('./handlers/pullRequest');
-const logger = require('./utils/logger');
-const { getGitHubCredentials, getDeploymentConfig, loadEnv } = require('./utils/config');
+import express from 'express';
+import bodyParser from 'body-parser';
+import crypto from 'crypto';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import { handlePullRequest } from './handlers/pullRequest.js';
+import logger from './utils/logger.js';
+import { getGitHubCredentials, getDeploymentConfig, loadEnv } from './utils/config.js';
+
+// For __dirname equivalent in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Load environment variables
 loadEnv();
@@ -69,14 +75,14 @@ async function setupDevelopmentProxy(proxyUrl, serverPort) {
       
       const smee = new SmeeClient({
         source: proxyUrl,
-        target: `http://localhost:${serverPort}/webhook`,
+        target: `http://localhost:${serverPort}`,
         logger: {
           info: message => logger.info(`[Smee] ${message}`),
           error: message => logger.error(`[Smee] ${message}`)
         }
       });
 
-      logger.info(`Starting Smee client to forward ${proxyUrl} to http://localhost:${serverPort}/webhook`);
+      logger.info(`Starting Smee client to forward ${proxyUrl} to http://localhost:${serverPort}`);
       
       try {
         const events = smee.start();
@@ -182,7 +188,7 @@ app.get('/', (req, res) => {
 });
 
 // Webhook endpoint with signature verification
-app.post('/webhook', verifyGitHubWebhook, (req, res) => {
+app.post('/', verifyGitHubWebhook, (req, res) => {
   try {
     const event = req.headers['x-github-event'];
     const action = req.body.action;
@@ -279,8 +285,8 @@ function startServer() {
       
       logger.info('Configure your GitHub App to send webhooks to this server');
       logger.info(webhookProxyUrl ? 
-        `Webhook URL: ${webhookProxyUrl} (forwarded to localhost:${port}/webhook)` : 
-        `Webhook URL: https://your-deployed-app.com/webhook`);
+        `Webhook URL: ${webhookProxyUrl} (forwarded to localhost:${port})` : 
+        `Webhook URL: https://your-deployed-app.com`);
     }
   });
 
@@ -291,4 +297,4 @@ function startServer() {
 const server = startServer();
 
 // Export server for testing
-module.exports = server;
+export default server;
