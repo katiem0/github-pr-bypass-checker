@@ -34,7 +34,7 @@ The GitHub Ruleset Checker is a GitHub App designed to monitor pull requests and
 4. Fill in the required information:
    - App name: `Ruleset Bypass Checker` (or your preferred name)
    - Homepage URL: Your app's URL or GitHub repository
-   - Webhook URL: Your deployed app URL (or Smee URL for dev)
+   - Webhook URL: Your deployed app URL (e.g., `https://your-app-domain.com/webhook` or Smee URL for dev with `/webhook` appended)
    - Webhook secret: Create a secure random string
 5. Set the following permissions:
    - Repository permissions:
