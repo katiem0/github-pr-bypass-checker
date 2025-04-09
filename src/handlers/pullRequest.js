@@ -69,6 +69,10 @@ async function handlePullRequestClosed(pullRequest) {
         
         // Get authenticated Octokit client
         const octokit = await createOctokitClient();
+        if (!octokit) {
+            logger.error('Failed to create Octokit client, aborting ruleset check');
+            return;
+        }
         
         // Initialize variables to collect bypass information
         let repoBypassedRuleSuites = [];
@@ -102,6 +106,7 @@ async function handlePullRequestClosed(pullRequest) {
         }
     } catch (error) {
         logger.error(`Error processing closed pull request: ${error.message}`);
+        logger.debug(error.stack);
     }
 }
 
@@ -150,7 +155,7 @@ function formatRuleSuites(ruleSuites) {
         return '';
     }
     
-    return ruleSuites.map((ruleSuite, index) => {
+    return ruleSuites.map((ruleSuite) => {
         // Extract ruleset information with fallbacks for different API response formats
         const beforeSha = ruleSuite.before_sha ? ruleSuite.before_sha.substring(0, 7) : 'Unknown';
         const afterSha = ruleSuite.after_sha ? ruleSuite.after_sha.substring(0, 7) : 'Unknown';

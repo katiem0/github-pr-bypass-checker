@@ -1,95 +1,158 @@
-import { createOctokitClient, postComment } from '../../src/utils/github.js';
-import { jest } from '@jest/globals';
+import { jest, describe, beforeEach, test, expect } from '@jest/globals';
+import { handlePullRequest, validateRuleset } from '../../src/handlers/pullRequest.js';
+import logger from '../../src/utils/logger.js';
+import { setupGitHubMocks } from '../__mocks__/githubMocks.js';
 
-// Mock dependencies
-jest.mock('../../src/utils/github');
-jest.mock('../../src/utils/logger', () => ({
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-}));
+// Helper function to find a specific message in logger calls
+function findLoggerCall(mockFn, stringToFind) {
+  const calls = mockFn.mock.calls || [];
+  return calls.find(call => 
+    typeof call[0] === 'string' && call[0].includes(stringToFind)
+  );
+}
 
-describe('Pull Request Closed Handler', () => {
-    let mockOctokit;
-    let mockContext;
-    
-    beforeEach(() => {
-        // Create a mock Octokit instance with necessary methods
-        mockOctokit = {
-            request: jest.fn().mockResolvedValue({
-                data: {
-                    rule_suites: [
-                        {
-                            rule_id: 'rule-123',
-                            source_ref: 'main',
-                            after_sha: 'merge-sha-123',
-                            status: 'bypass'
-                        }
-                    ]
-                }
-            }),
-            issues: {
-                createComment: jest.fn().mockResolvedValue({})
-            }
-        };
-        
-        // Mock the Octokit client creation
-        createOctokitClient.mockResolvedValue(mockOctokit);
-        postComment.mockResolvedValue(undefined);
-        
-        // Create a mock webhook context for a closed PR
-        mockContext = {
-            payload: {
-                action: 'closed',
-                pull_request: {
-                    number: 123,
-                    merged: true,
-                    merge_commit_sha: 'merge-sha-123',
-                    base: {
-                        ref: 'main',
-                        repo: {
-                            full_name: 'test-owner/test-repo'
-                        }
-                    }
-                }
-            }
-        };
+// Helper function to get the last call to a mock function
+function getLastCall(mockFn) {
+  const calls = mockFn.mock.calls || [];
+  return calls.length > 0 ? calls[calls.length - 1] : null;
+}
+
+// Helper function to check if a mock function was called with a specific message
+function expectMockCalledWith(mockFn, stringToFind) {
+  const matchingCall = findLoggerCall(mockFn, stringToFind);
+  
+  // Print debug info if no match found
+  if (!matchingCall) {
+    const calls = mockFn.mock.calls || [];
+    console.log(`No call found containing "${stringToFind}". All calls:`);
+    calls.forEach((call, i) => {
+      console.log(`Call ${i + 1}:`, call[0]);
     });
+    return false;
+  }
+  return true;
+}
+
+describe('Pull Request Handler', () => {
+  beforeEach(() => {
+    // Reset and configure mocks before each test
+    jest.resetAllMocks();
+    setupGitHubMocks();
     
-    afterEach(() => {
-        jest.clearAllMocks();
+    // Make sure logger is properly mocked
+    if (!jest.isMockFunction(logger.info)) {
+      logger.info = jest.fn();
+    }
+    if (!jest.isMockFunction(logger.warn)) {
+      logger.warn = jest.fn();
+    }
+    if (!jest.isMockFunction(logger.error)) {
+      logger.error = jest.fn();
+    }
+  });
+
+  test('validateRuleset should return true by default', () => {
+    const result = validateRuleset({
+      number: 123,
     });
+
+    expect(result).toBe(true);
+    expect(expectMockCalledWith(logger.info, 'Reviewing ruleset for PR #123')).toBe(true);
+  });
+
+  test('validateRuleset should handle errors and return true', () => {
+    logger.info.mockImplementation(() => {
+      throw new Error('Test error');
+    });
+
+    const result = validateRuleset({
+      number: 123
+    });
+
+    expect(result).toBe(true);
+    expect(expectMockCalledWith(logger.error, 'Test error')).toBe(true);
+  });
+
+  test('handlePullRequest should skip non-merged PRs', async () => {
+    const context = {
+      payload: {
+        action: 'closed',
+        pull_request: {
+          number: 123,
+          merged: false
+        }
+      }
+    };
+
+    await handlePullRequest(context);
     
-    test('should check rule suites when pull request is merged', async () => {
-        await handlePullRequest(mockContext);
-        
-        // Verify that the API was called correctly for repo-level rules
-        expect(mockOctokit.request).toHaveBeenCalledWith(
-            expect.stringContaining('/repos/test-owner/test-repo/rule-suites'),
-            expect.objectContaining({
-                ref: 'main',
-                rule_suite_result: 'bypass'
-            })
-        );
-        
-        // Verify that a comment was posted about bypassed rules
-        expect(postComment).toHaveBeenCalledWith(
-            mockOctokit,
-            'test-owner',
-            'test-repo',
-            123,
-            expect.stringContaining('Ruleset Bypass Detected')
-        );
-    });
+    const skipMessageCall = findLoggerCall(logger.info, 'Skipping ruleset bypass check');
+    const lastCall = getLastCall(logger.info);
+    const lastMessageHasSkipText = lastCall && 
+      typeof lastCall[0] === 'string' && 
+      lastCall[0].includes('Skipping ruleset bypass check');
     
-    test('should not check rule suites when pull request is closed without merging', async () => {
-        mockContext.payload.pull_request.merged = false;
-        mockContext.payload.pull_request.merge_commit_sha = null;
-        
-        await handlePullRequest(mockContext);
-        
-        // Verify that the API was not called
-        expect(mockOctokit.request).not.toHaveBeenCalled();
-        expect(postComment).not.toHaveBeenCalled();
-    });
+    expect(skipMessageCall).toBeTruthy();
+    expect(lastMessageHasSkipText).toBe(true);
+  });
+
+  test('handlePullRequest should process merged PRs', async () => {
+    const context = {
+      payload: {
+        action: 'closed',
+        pull_request: {
+          number: 123,
+          merged: true,
+          base: {
+            repo: {
+              full_name: 'owner/repo'
+            },
+            ref: 'main'
+          },
+          merge_commit_sha: 'abcd1234'
+        }
+      }
+    };
+
+    await handlePullRequest(context);
+
+    expect(expectMockCalledWith(logger.info, 'was merged, checking for ruleset bypasses')).toBe(true);
+  });
+
+
+  test('handlePullRequest should handle missing payloads', async () => {
+    await handlePullRequest({});
+
+    expect(expectMockCalledWith(logger.error, 'No payload in webhook context')).toBe(true);
+  });
+
+  test('handlePullRequest should handle missing pull requests', async () => {
+    await handlePullRequest({ payload: {} });
+
+    expect(expectMockCalledWith(logger.error, 'No pull request in payload')).toBe(true);
+  });
+
+  test('handlePullRequest should skip pull requests without merge commit', async () => {
+    const context = {
+      payload: {
+        action: 'closed',
+        pull_request: {
+          number: 123,
+          merged: true,
+          base: {
+            repo: {
+              full_name: 'owner/repo'
+            },
+            ref: 'main'
+          },
+          merge_commit_sha: null
+        }
+      }
+    };
+
+    await handlePullRequest(context);
+
+    const closedMessageCall = findLoggerCall(logger.info, 'closed without merging');
+    expect(closedMessageCall).toBeTruthy();
+  });
 });

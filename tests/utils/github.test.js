@@ -1,42 +1,42 @@
-import { fetchPullRequest, postComment } from '../../src/utils/github.js';
-import { validateRuleset } from '../../src/handlers/ruleset.js';
-import { jest } from '@jest/globals';
+import { fetchPullRequestDetails, postComment } from '../../src/utils/github.js';
+import { jest, describe, beforeEach, test, expect } from '@jest/globals';
 
 describe('GitHub Utility Functions', () => {
-    let mockFetchPullRequest;
-    let mockPostComment;
-
     beforeEach(() => {
-        mockFetchPullRequest = jest.spyOn(require('../../src/utils/github'), 'fetchPullRequest');
-        mockPostComment = jest.spyOn(require('../../src/utils/github'), 'postComment');
+        jest.resetAllMocks();
     });
 
-    afterEach(() => {
-        jest.clearAllMocks();
+    test('fetchPullRequestDetails should make API call with correct parameters', async () => {
+        const mockOctokit = {
+            pulls: {
+                get: jest.fn().mockResolvedValue({ data: { title: 'Test PR' } })
+            }
+        };
+        
+        const result = await fetchPullRequestDetails(mockOctokit, 'testOwner', 'testRepo', 123);
+        
+        expect(mockOctokit.pulls.get).toHaveBeenCalledWith({
+            owner: 'testOwner',
+            repo: 'testRepo',
+            pull_number: 123
+        });
+        expect(result).toEqual({ title: 'Test PR' });
     });
 
-    test('fetchPullRequest should be called with correct parameters', async () => {
-        const pullRequestId = 1;
-        await fetchPullRequest(pullRequestId);
-        expect(mockFetchPullRequest).toHaveBeenCalledWith(pullRequestId);
-    });
-
-    test('postComment should be called with correct parameters', async () => {
-        const pullRequestId = 1;
-        const comment = 'This merge bypasses the ruleset.';
-        await postComment(pullRequestId, comment);
-        expect(mockPostComment).toHaveBeenCalledWith(pullRequestId, comment);
-    });
-
-    test('validateRuleset should return true if ruleset is bypassed', () => {
-        const rulesetConditions = { condition: 'some condition' };
-        const result = validateRuleset(rulesetConditions);
-        expect(result).toBe(true);
-    });
-
-    test('validateRuleset should return false if ruleset is not bypassed', () => {
-        const rulesetConditions = { condition: 'another condition' };
-        const result = validateRuleset(rulesetConditions);
-        expect(result).toBe(false);
+    test('postComment should make API call with correct parameters', async () => {
+        const mockOctokit = {
+            issues: {
+                createComment: jest.fn().mockResolvedValue({})
+            }
+        };
+        
+        await postComment(mockOctokit, 'testOwner', 'testRepo', 123, 'Test comment');
+        
+        expect(mockOctokit.issues.createComment).toHaveBeenCalledWith({
+            owner: 'testOwner',
+            repo: 'testRepo',
+            issue_number: 123,
+            body: 'Test comment'
+        });
     });
 });

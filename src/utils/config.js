@@ -1,11 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
 import logger from './logger.js';
-
-// Get __dirname equivalent in ESM
-const __filename = fileURLToPath(import.meta.url);
+import process from 'node:process';
 
 /**
  * Load environment variables from .env file

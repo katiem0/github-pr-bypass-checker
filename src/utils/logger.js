@@ -1,12 +1,12 @@
 import fs from 'fs';
-import path from 'path';
+import process from 'node:process';
 
 // Get environment variables for logging configuration
 const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
 const LOG_TO_FILE = process.env.LOG_TO_FILE === 'true';
 const LOG_FILE = process.env.LOG_FILE || 'app.log';
+const isProduction = process.env.NODE_ENV === 'production';
 
-// Define log levels with numeric values for comparison
 const LOG_LEVELS = {
   debug: 0,
   info: 1,
@@ -17,6 +17,9 @@ const LOG_LEVELS = {
 // Create logger with appropriate methods
 const logger = {
   debug: (message) => {
+    if (isProduction && LOG_LEVELS[LOG_LEVEL] > LOG_LEVELS.debug) {
+      return;
+    }
     if (LOG_LEVELS[LOG_LEVEL] <= LOG_LEVELS.debug) {
       console.debug(`DEBUG: ${message}`);
       if (LOG_TO_FILE) {

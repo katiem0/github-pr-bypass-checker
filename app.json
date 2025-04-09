@@ -22,6 +22,6 @@
   },
   "url": "https://github.com/katiem0/github-pr-bypass-checker",
   "hook_attributes": {
-    "url": "https://yourapp.com"
+    "url": "https://yourapp.com/webhook"
   }
 }

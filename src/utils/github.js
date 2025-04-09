@@ -1,6 +1,7 @@
 import { Octokit } from "@octokit/rest";
 import { createAppAuth } from "@octokit/auth-app";
 import logger from './logger.js';
+import process from 'node:process';
 import { getGitHubCredentials } from './config.js';
 
 /**
@@ -62,9 +63,15 @@ async function createOctokitClient() {
             auth: token,
             baseUrl: process.env.GITHUB_API_URL || 'https://api.github.com',
             request: {
-                timeout: 10000, // 10 second timeout
+                timeout: 10000,
                 retries: 3,
-                retryAfter: 1 // 1 second between retries
+                retryAfter: 1 
+            },
+            throttle: {
+                onRateLimit: (retryAfter, retryCount) => {
+                    logger.warn(`Rate limit hit, retrying after ${retryAfter} seconds (${retryCount}/3)`);
+                    return retryCount < 3;
+                }
             }
         });
         
