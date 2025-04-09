@@ -1,7 +1,8 @@
-const fs = require('fs');
-const path = require('path');
-const dotenv = require('dotenv');
-const logger = require('./logger');
+import fs from 'fs';
+import path from 'path';
+import dotenv from 'dotenv';
+import logger from './logger.js';
+import process from 'node:process';
 
 /**
  * Load environment variables from .env file
@@ -131,7 +132,7 @@ function getDeploymentConfig() {
   };
 }
 
-module.exports = {
+export {
   getGitHubCredentials,
   getDeploymentConfig,
   loadEnv

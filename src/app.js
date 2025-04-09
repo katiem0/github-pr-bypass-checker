@@ -1,16 +1,16 @@
-const express = require('express');
-const bodyParser = require('body-parser');
-const crypto = require('crypto');
-const { handlePullRequest } = require('./handlers/pullRequest');
-const logger = require('./utils/logger');
-const { getGitHubCredentials, getDeploymentConfig, loadEnv } = require('./utils/config');
+import express from 'express';
+import bodyParser from 'body-parser';
+import { Buffer } from 'node:buffer';
+import crypto from 'crypto';
+import { handlePullRequest } from './handlers/pullRequest.js';
+import logger from './utils/logger.js';
+import process from 'node:process';
+import { getGitHubCredentials, getDeploymentConfig, loadEnv } from './utils/config.js';
 
-// Load environment variables
-loadEnv();
-
-// Initialize configuration
+const processedWebhooks = new Set();
 const { port, nodeEnv } = getDeploymentConfig();
 const { appId, privateKey, webhookSecret } = getGitHubCredentials();
+loadEnv();
 
 // Log basic configuration (avoid logging sensitive values)
 logger.info(`GitHub Ruleset Checker starting...`);
@@ -31,6 +31,7 @@ if (nodeEnv === 'development') {
     setupDevelopmentProxy(webhookProxyUrl, port);
   }
 }
+
 /**
  * Set up a development proxy (Smee) for local webhook testing
  * @param {string} proxyUrl - The Smee proxy URL
@@ -40,31 +41,27 @@ async function setupDevelopmentProxy(proxyUrl, serverPort) {
   try {
     logger.info(`Setting up development webhook proxy with URL: ${proxyUrl}`);
     
-    // Check Node.js version to handle fetch polyfill for Node 18+
-    const nodeVersion = process.version;
-    if (nodeVersion.startsWith('v18') || nodeVersion.startsWith('v19') || nodeVersion.startsWith('v20')) {
+    // For Node.js 18+, ensure we have the fetch polyfill
+    if (!globalThis.fetch) {
       try {
-        const nodeFetch = require('node-fetch');
-        // @ts-ignore
-        if (!globalThis.fetch) {
-          globalThis.fetch = nodeFetch;
-          globalThis.Headers = nodeFetch.Headers;
-          globalThis.Request = nodeFetch.Request;
-          globalThis.Response = nodeFetch.Response;
-          logger.info('Successfully added fetch polyfill for Smee client');
-        }
+        const { default: nodeFetch, Headers, Request, Response } = await import('node-fetch');
+        globalThis.fetch = nodeFetch;
+        globalThis.Headers = Headers;
+        globalThis.Request = Request;
+        globalThis.Response = Response;
+        logger.info('Successfully added fetch polyfill for Smee client');
       } catch (fetchError) {
         logger.error(`Could not load node-fetch: ${fetchError.message}`);
         logger.error('Try running: npm install node-fetch@2');
+        return null;
       }
     }
     
     try {
-      // Use CommonJS require for Smee client (not ES modules)
-      const SmeeClient = require('smee-client');
+      const { default: SmeeClient } = await import('smee-client');
       
       if (!SmeeClient) {
-        throw new Error('SmeeClient is undefined after require');
+        throw new Error('SmeeClient is undefined after import');
       }
       
       const smee = new SmeeClient({
@@ -78,42 +75,17 @@ async function setupDevelopmentProxy(proxyUrl, serverPort) {
 
       logger.info(`Starting Smee client to forward ${proxyUrl} to http://localhost:${serverPort}/webhook`);
       
-      try {
-        const events = smee.start();
-        logger.info('[Smee] Client started successfully');
-        
-        // Add explicit error handling
-        if (events && events.source) {
-          events.source.onerror = function(err) {
-            logger.error(`[Smee] EventSource error: ${err ? (err.message || err) : 'Unknown error'}`);
-          };
-          
-          events.source.onmessage = function(message) {
-            logger.info(`[Smee] Received event`);
-          };
-          
-          return events;
-        } else {
-          logger.error('[Smee] Failed to create event source');
-          return null;
-        }
-      } catch (startError) {
-        logger.error(`[Smee] Error starting client: ${startError.message}`);
-        return null;
-      }
-    } catch (importError) {
-      logger.error(`Failed to import smee-client: ${importError.message}`);
-      // Check if package is installed
-      try {
-        require.resolve('smee-client');
-        logger.info('smee-client is installed but could not be initialized');
-      } catch (e) {
-        logger.error('smee-client package is not installed. Try: npm install smee-client');
-      }
+      smee.start();
+      logger.info('[Smee] Client started successfully');
+      
+    } catch (smeeError) {
+      logger.error(`Failed to initialize Smee client: ${smeeError.message}`);
+      logger.error(smeeError.stack);
       return null;
     }
   } catch (error) {
     logger.error(`Failed to setup development proxy: ${error.message}`);
+    logger.error(error.stack);
     return null;
   }
 }
@@ -121,7 +93,7 @@ async function setupDevelopmentProxy(proxyUrl, serverPort) {
 // Configure body parser with webhook signature verification
 app.use(bodyParser.json({
   limit: '10mb',
-  verify: (req, res, buf, encoding) => {
+  verify: (req, res, buf) => {
     if (buf && buf.length && webhookSecret) {
       req.rawBody = buf;
       // Store the signature for later verification
@@ -171,16 +143,6 @@ function verifyGitHubWebhook(req, res, next) {
   }
 }
 
-// Health check endpoint
-app.get('/', (req, res) => {
-  res.status(200).json({
-    status: 'healthy',
-    app: 'GitHub Ruleset Checker',
-    version: process.env.npm_package_version || '1.0.0',
-    environment: nodeEnv
-  });
-});
-
 // Webhook endpoint with signature verification
 app.post('/webhook', verifyGitHubWebhook, (req, res) => {
   try {
@@ -211,15 +173,33 @@ app.post('/webhook', verifyGitHubWebhook, (req, res) => {
 // Health check endpoint
 app.get('/health', (req, res) => {
   const healthStatus = {
-    status: 'healthy',
-    uptime: Math.floor(process.uptime()),
-    timestamp: new Date().toISOString(),
-    version: process.env.npm_package_version || '1.0.0',
-    nodeVersion: process.version,
-    memoryUsage: process.memoryUsage()
+      status: 'healthy',
+      uptime: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString(),
+      version: process.env.npm_package_version || '1.0.0',
+      nodeVersion: process.version,
+      memoryUsage: {
+          rss: Math.round(process.memoryUsage().rss / 1024 / 1024) + 'MB',
+          heapTotal: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + 'MB',
+          heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'MB',
+          external: Math.round(process.memoryUsage().external / 1024 / 1024) + 'MB'
+      },
+      processedWebhooks: processedWebhooks.size
   };
   
   res.status(200).json(healthStatus);
+});
+
+app.get('/metrics', (req, res) => {
+  const metrics = {
+      webhooks: {
+          processed: processedWebhooks.size,
+      },
+      memory: process.memoryUsage(),
+      uptime: process.uptime()
+  };
+  
+  res.status(200).json(metrics);
 });
 
 /**
@@ -231,31 +211,49 @@ app.get('/health', (req, res) => {
  */
 async function processWebhook(event, action, payload, deliveryId) {
   try {
-      logger.info(`Processing ${event}.${action || 'unknown'} webhook (${deliveryId || 'no-id'})`);
+    // Generate a unique identifier for this webhook
+    const prNumber = payload.pull_request?.number || 'unknown';
+    const mergeCommitSha = payload.pull_request?.merge_commit_sha || '';
+    const webhookId = `${event}.${action}.${deliveryId}.${prNumber}.${mergeCommitSha}`;
+    const webhookHash = crypto.createHash('md5').update(webhookId).digest('hex');
       
-      // For pull requests, only consider them when they're closed and merged
-      if (event === 'pull_request') {
-          // Only process merged PRs
-          if (action === 'closed' && payload.pull_request && payload.pull_request.merged === true) {
-              logger.info(`Processing merged pull request #${payload.pull_request.number}`);
-              await handlePullRequest({ payload });
-          } else {
-              logger.info(`Skipping non-merged pull request #${payload.pull_request?.number || 'unknown'}`);
-          }
-      } else if (event === 'protected_branch' && action === 'policy_override') {
-          logger.info('Received protected_branch.policy_override event');
-          // Add handling for protected branch events if needed
+    // Check if we've already processed this webhook
+    if (processedWebhooks.has(webhookHash)) {
+      logger.info(`Skipping duplicate webhook: ${webhookId} (${webhookHash})`);
+      return;
+    }
+      
+    // Add to processed set before processing
+    processedWebhooks.add(webhookHash);
+    logger.info(`Processing ${event}.${action || 'unknown'} webhook (${deliveryId || 'no-id'})`);
+      
+    if (event === 'pull_request') {
+      if (action === 'closed' && payload.pull_request && payload.pull_request.merged === true) {
+        logger.info(`Processing merged pull request #${payload.pull_request.number}`);
+        await handlePullRequest({ payload });
       } else {
-          logger.info(`No handler for ${event}.${action || 'unknown'} event`);
+        logger.info(`Skipping non-merged pull request #${payload.pull_request?.number || 'unknown'}`);
       }
+    } else if (event === 'protected_branch' && action === 'policy_override') {
+      logger.info('Received protected_branch.policy_override event');
+    } else {
+      logger.info(`No handler for ${event}.${action || 'unknown'} event`);
+    }
       
-      logger.info(`Finished processing ${event}.${action || 'unknown'} webhook (${deliveryId || 'no-id'})`);
+    // Clean up Set periodically to prevent memory leaks
+    if (processedWebhooks.size > 1000) {
+      const iterator = processedWebhooks.values();
+      for (let i = 0; i < 200; i++) {
+        processedWebhooks.delete(iterator.next().value);
+      }
+    }
+      
+    logger.info(`Finished processing ${event}.${action || 'unknown'} webhook (${deliveryId || 'no-id'})`);
   } catch (error) {
-      logger.error(`Error processing ${event}.${action || 'unknown'} webhook: ${error.message}`);
-      logger.error(error.stack);
+    logger.error(`Error processing ${event}.${action || 'unknown'} webhook: ${error.message}`);
+    logger.error(error.stack);
   }
 }
-
 // Start the server
 function startServer() {
   const server = app.listen(port, '0.0.0.0', async () => {
@@ -266,12 +264,8 @@ function startServer() {
     } else {
       logger.info(`Running in ${nodeEnv} mode`);
       
-      // Check if webhook proxy is configured in development mode
-      const { webhookProxyUrl } = getDeploymentConfig();
-      if (webhookProxyUrl) {
-        logger.info(`Starting webhook proxy with URL: ${webhookProxyUrl}`);
-        await setupDevelopmentProxy(webhookProxyUrl, port);
-      } else {
+      const { webhookProxyUrl } = getGitHubCredentials();
+      if (!webhookProxyUrl) {
         logger.warn('No WEBHOOK_PROXY_URL configured in .env file. Webhook forwarding not enabled.');
         logger.info('For local development, create a Smee channel at https://smee.io/new');
         logger.info('Then add WEBHOOK_PROXY_URL=your-smee-url to your .env file');
@@ -291,4 +285,4 @@ function startServer() {
 const server = startServer();
 
 // Export server for testing
-module.exports = server;
+export default server;

@@ -1,4 +1,4 @@
-# GitHub Ruleset Checker
+# GitHub Ruleset Bypass Checker
 
 ## Overview
 
@@ -21,7 +21,7 @@ The GitHub Ruleset Checker is a GitHub App designed to monitor pull requests and
 
 ### Prerequisites
 
-- Node.js 16+ (Node.js 18+ requires additional setup for Smee)
+- Node.js 18+
 - npm or yarn
 - A GitHub account with permissions to create GitHub Apps
 - If using local development: ngrok, Smee.io, or another webhook forwarding service
@@ -32,22 +32,19 @@ The GitHub Ruleset Checker is a GitHub App designed to monitor pull requests and
 2. Select "GitHub Apps" under "Developer settings"
 3. Click "New GitHub App"
 4. Fill in the required information:
-   - App name: `Ruleset Checker` (or your preferred name)
+   - App name: `Ruleset Bypass Checker` (or your preferred name)
    - Homepage URL: Your app's URL or GitHub repository
-   - Webhook URL: Your deployed app URL + `/webhook` (or Smee URL for dev)
+   - Webhook URL: Your deployed app URL (e.g., `https://your-app-domain.com/webhook` or Smee URL for dev with `/webhook` appended)
    - Webhook secret: Create a secure random string
 5. Set the following permissions:
    - Repository permissions:
-     - Issues: Write (for commenting on PRs)
      - Pull requests: Write
-     - Repository administration: Read
+     - Administration: Read and Write
      - Metadata: Read
    - Organization permissions:
-     - Administration: Read
+     - Administration: Read and Write
 6. Subscribe to events:
    - Pull request
-   - Protected branch
-   - Organization (if checking org-level rulesets)
 7. Create the App and note the App ID
 8. Generate a private key and download it
 9. Install the app on your organization or repositories
